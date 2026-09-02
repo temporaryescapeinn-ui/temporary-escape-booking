@@ -117,7 +117,7 @@ const SHORTCUTS = {
   shortStay: (checkin) => { const d = new Date(checkin); d.setHours(d.getHours() + 3); return d; },
   overnight: (checkin) => { const d = addDays(checkin, 1); d.setHours(8, 0, 0, 0); return d; },
   halfDay: (checkin) => { const d = addDays(checkin, 1); d.setHours(8, 0, 0, 0); return d; },
-  fullDay: (checkin) => { const d = addDays(checkin, 1); d.setHours(checkin.getHours(), checkin.getMinutes(), 0, 0); return d; },
+  fullDay: (checkin) => { const d = addDays(checkin, 1); d.setHours(8, 0, 0, 0); return d; },
 };
 
 document.querySelectorAll('.shortcut').forEach((btn) => {
@@ -219,6 +219,16 @@ function recompute() {
   }
 
   el('recapTimes').textContent = `${formatRecapTime(checkin)} → ${formatRecapTime(checkout)}`;
+
+  if (checkin.getTime() < Date.now()) {
+    priceValueEl.hidden = true;
+    packageLabelEl.hidden = true;
+    unavailableEl.hidden = false;
+    unavailableEl.textContent = "Check-in can't be in the past — pick a later time.";
+    whatsappBtn.disabled = true;
+    lastQuote = null;
+    return;
+  }
 
   const result = quote(room, checkin, checkout);
   lastQuote = { room, checkin, checkout, result };
