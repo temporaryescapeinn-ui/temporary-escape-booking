@@ -60,6 +60,8 @@ const TIME = {
   sixPM: 18 * 60,
   eightPM: 20 * 60,
   overnightStart: 19 * 60 + 30,
+  workingHoursStart: 8 * 60 + 30, // 8:30am — nothing can check in before this
+  workingHoursEnd: 21 * 60 + 45, // 9:45pm — nothing can check in after this
 };
 
 const PACKAGE_LABELS = {
@@ -166,6 +168,10 @@ function calculatePrice(room, checkIn, checkOut) {
   const dayDiff = calendarDaysBetween(checkIn, checkOut);
   const checkInMinutes = minutesOfDay(checkIn);
   const checkOutMinutes = minutesOfDay(checkOut);
+
+  if (checkInMinutes < TIME.workingHoursStart || checkInMinutes > TIME.workingHoursEnd) {
+    throw new Error('Check-in must be between 8:30am and 9:45pm — message us directly for anything outside that.');
+  }
 
   if (dayDiff === 0) {
     return calculateSameDayPrice(room, checkInMinutes, checkOutMinutes, durationHours);
