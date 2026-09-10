@@ -91,12 +91,28 @@ function crosses6pmPrice(room) {
   return room.key === 'white' ? 130 : CROSSES_6PM_PRICE;
 }
 
-function lateCheckoutFee(checkOutMinutes) {
+// Sat/Sun checkout between 10am-4pm costs $20 more than the same time on a
+// weekday — weekend turnover is tighter, so a late checkout in that window
+// is more disruptive. Before 10am and from 4pm on, weekday and weekend cost
+// the same (either well within grace, or already at the steep end).
+const WEEKEND_SURCHARGE = 20;
+
+function isWeekend(d) {
+  const day = d.getDay();
+  return day === 0 || day === 6;
+}
+
+function lateCheckoutFee(checkOutMinutes, checkOutDate) {
+  const weekendSurcharge =
+    isWeekend(checkOutDate) && checkOutMinutes > TIME.tenAM && checkOutMinutes <= TIME.fourPM
+      ? WEEKEND_SURCHARGE
+      : 0;
+
   if (checkOutMinutes <= TIME.eightThirtyAM) return 0;
   if (checkOutMinutes <= TIME.tenAM) return 20;
-  if (checkOutMinutes <= TIME.noon) return 40;
-  if (checkOutMinutes <= TIME.twoPM) return 60;
-  if (checkOutMinutes <= TIME.fourPM) return 80;
+  if (checkOutMinutes <= TIME.noon) return 40 + weekendSurcharge;
+  if (checkOutMinutes <= TIME.twoPM) return 60 + weekendSurcharge;
+  if (checkOutMinutes <= TIME.fourPM) return 80 + weekendSurcharge;
   if (checkOutMinutes <= TIME.sixPM) return 100;
   return 120;
 }
@@ -150,9 +166,9 @@ function calculateSameDayPrice(room, checkInMinutes, checkOutMinutes, durationHo
   return { packageType: 'fullDay', price: room.fullDayPrice, isFallbackEstimate: true };
 }
 
-function calculateMultiNightPrice(room, checkInMinutes, checkOutMinutes, nights) {
+function calculateMultiNightPrice(room, checkInMinutes, checkOutMinutes, checkOutDate, nights) {
   const base = firstNightBase(room, checkInMinutes) + room.fullDayPrice * (nights - 1);
-  const fee = lateCheckoutFee(checkOutMinutes);
+  const fee = lateCheckoutFee(checkOutMinutes, checkOutDate);
   const packageType = nights >= 2 ? 'multiDay' : packageTypeForCheckIn(checkInMinutes);
   return { packageType, price: base + fee, isFallbackEstimate: false };
 }
@@ -179,7 +195,7 @@ function calculatePrice(room, checkIn, checkOut) {
   if (dayDiff > MAX_NIGHTS) {
     throw new Error(`Stays longer than ${MAX_NIGHTS} nights aren't quoted here — message us directly.`);
   }
-  return calculateMultiNightPrice(room, checkInMinutes, checkOutMinutes, dayDiff);
+  return calculateMultiNightPrice(room, checkInMinutes, checkOutMinutes, checkOut, dayDiff);
 }
 
 /** Customer-facing wrapper: never throws. Returns
