@@ -230,6 +230,19 @@ function recompute() {
     return;
   }
 
+  // The date input's max attribute is only a hint (a typed-in date stays in
+  // the field), so the 3-week booking window has to be enforced here too.
+  const checkinDay = new Date(checkin.getFullYear(), checkin.getMonth(), checkin.getDate());
+  if (checkinDay.getTime() > addDays(today(), MAX_ADVANCE_DAYS).getTime()) {
+    priceValueEl.hidden = true;
+    packageLabelEl.hidden = true;
+    unavailableEl.hidden = false;
+    unavailableEl.textContent = 'Bookings open up to 3 weeks ahead — pick an earlier date.';
+    whatsappBtn.disabled = true;
+    lastQuote = null;
+    return;
+  }
+
   const result = quote(room, checkin, checkout);
   lastQuote = { room, checkin, checkout, result };
 
