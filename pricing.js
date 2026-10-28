@@ -10,7 +10,7 @@ const ROOMS = {
     subtitle: 'Yellow, Orange and Green',
     shortStay3hrPrice: 80,
     shortStayFlat: false,
-    shortStayStartRestricted: true,
+    shortStayLastStart: 17 * 60, // 5:00pm
     overnightPrice: 100,
     halfDayPrice: 120,
     fullDayPrice: 140,
@@ -21,7 +21,7 @@ const ROOMS = {
     subtitle: null,
     shortStay3hrPrice: 70,
     shortStayFlat: false,
-    shortStayStartRestricted: false,
+    shortStayLastStart: 18 * 60, // 6:00pm
     overnightPrice: 100,
     halfDayPrice: 120,
     fullDayPrice: 140,
@@ -32,7 +32,7 @@ const ROOMS = {
     subtitle: null,
     shortStay3hrPrice: 120,
     shortStayFlat: true,
-    shortStayStartRestricted: true,
+    shortStayLastStart: 17 * 60, // 5:00pm
     overnightPrice: 120,
     halfDayPrice: 130,
     fullDayPrice: 150,
@@ -51,7 +51,6 @@ const MAX_ADVANCE_DAYS = 21;
 
 const TIME = {
   shortStayWindowStart: 8 * 60 + 30,
-  shortStayWindowEnd: 17 * 60 + 30,
   eightThirtyAM: 8 * 60 + 30,
   tenAM: 10 * 60,
   noon: 12 * 60,
@@ -131,8 +130,7 @@ function packageTypeForCheckIn(checkInMinutes) {
 
 function calculateSameDayPrice(room, checkInMinutes, checkOutMinutes, durationHours) {
   const withinWindow =
-    room.shortStayStartRestricted === false ||
-    (checkInMinutes >= TIME.shortStayWindowStart && checkInMinutes <= TIME.shortStayWindowEnd);
+    checkInMinutes >= TIME.shortStayWindowStart && checkInMinutes <= room.shortStayLastStart;
 
   if (withinWindow) {
     if (durationHours < MIN_STAY_HOURS) {
@@ -156,7 +154,7 @@ function calculateSameDayPrice(room, checkInMinutes, checkOutMinutes, durationHo
     return { packageType: 'shortStay', price: shortStayTierPrice(room, 5), isFallbackEstimate: true };
   }
 
-  if (checkInMinutes > TIME.shortStayWindowEnd) {
+  if (checkInMinutes > room.shortStayLastStart) {
     if (durationHours < MIN_STAY_HOURS) {
       throw new Error(`Minimum stay is ${MIN_STAY_HOURS} hours.`);
     }
