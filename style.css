@@ -38,6 +38,12 @@ body {
   max-width: 420px;
   margin: 0 auto;
   padding: 14px;
+  padding-bottom: calc(14px + env(safe-area-inset-bottom));
+}
+
+button, .room-card {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .banner {
@@ -77,7 +83,7 @@ body {
 .section-label {
   font-family: var(--font-heading);
   font-weight: 600;
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 0.03em;
   text-transform: uppercase;
   color: var(--muted);
@@ -87,18 +93,15 @@ body {
 
 .section-label-row {
   display: flex;
-  justify-content: center;
-  align-items: baseline;
-  gap: 8px;
-  margin-bottom: 8px;
-  position: relative;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  margin-bottom: 10px;
 }
 .section-label-row .section-label { margin-bottom: 0; }
 .section-hint {
-  font-size: 10px;
+  font-size: 11px;
   color: var(--muted);
-  position: absolute;
-  right: 0;
 }
 
 .room-grid {
@@ -115,7 +118,7 @@ body {
   padding: 12px 6px;
   text-align: center;
   font-weight: 600;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--charcoal);
   cursor: pointer;
   display: flex;
@@ -141,8 +144,8 @@ body {
   position: absolute;
   top: 0;
   right: 0;
-  width: 26px;
-  height: 26px;
+  width: 36px;
+  height: 36px;
   padding: 0;
   background: none;
   border: none;
@@ -171,14 +174,14 @@ body {
 
 .room-info-panel {
   margin: 8px 0 0;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--muted);
   text-align: center;
 }
 
 .room-notice {
   margin: 6px 0 0;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--danger);
   text-align: center;
 }
@@ -190,8 +193,9 @@ body {
 }
 .chip {
   flex: 1;
+  min-height: 44px;
   padding: 6px;
-  font-size: 12px;
+  font-size: 14px;
   border-radius: 8px;
   border: 0.5px solid var(--border);
   background: var(--card-bg);
@@ -205,14 +209,22 @@ body {
 }
 
 .field-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
   gap: 6px;
 }
+@media (max-width: 400px) {
+  .page { padding-left: 12px; padding-right: 12px; }
+  .card { padding: 14px 12px; }
+}
+@media (max-width: 359px) {
+  .field-row { grid-template-columns: 1fr; }
+}
 .field-row input {
-  flex: 1;
   min-width: 0;
-  padding: 8px;
-  font-size: 13px;
+  min-height: 48px;
+  padding: 8px 10px;
+  font-size: 16px;
   border-radius: 8px;
   border: 0.5px solid var(--border);
   background: var(--card-bg);
@@ -234,10 +246,10 @@ body {
   align-items: center;
   justify-content: center;
   gap: 3px;
-  font-size: 10px;
+  font-size: 11px;
   color: var(--charcoal);
   text-align: center;
-  padding: 4px;
+  padding: 4px 2px;
   cursor: pointer;
 }
 .shortcut .icon { color: var(--muted); width: 16px; height: 16px; }
@@ -263,13 +275,13 @@ body {
   margin: 0;
 }
 .recap-times {
-  font-size: 12px;
+  font-size: 13px;
   color: #B5AEA2;
   margin: 3px 0 0;
   min-height: 16px;
 }
 .package-label {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--orange);
   margin: 12px 0 0;
 }
@@ -288,9 +300,10 @@ body {
 
 .whatsapp-btn {
   width: 100%;
+  min-height: 48px;
   padding: 12px;
   margin-top: 14px;
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 600;
   font-family: var(--font-heading);
   background: var(--whatsapp);
