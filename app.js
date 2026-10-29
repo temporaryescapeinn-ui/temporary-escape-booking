@@ -9,6 +9,7 @@ const el = (id) => document.getElementById(id);
 const state = {
   roomKey: null,
   disabledRooms: {}, // { roomKey: reason }
+  availability: null, // { version, days: { 'YYYY-MM-DD': [standard, white, blue] } } — levels 0-3
 };
 
 function pad(n) { return String(n).padStart(2, '0'); }
@@ -172,6 +173,11 @@ function formatRecapTime(d) {
 let lastQuote = null;
 
 function recompute() {
+  recomputeQuote();
+  updateHint();
+}
+
+function recomputeQuote() {
   const room = state.roomKey ? ROOMS[state.roomKey] : null;
   const checkin = readDateTime('checkinDate', 'checkinTime');
   const checkout = readDateTime('checkoutDate', 'checkoutTime');
@@ -265,14 +271,141 @@ function recompute() {
   btnLabel.textContent = 'Continue on WhatsApp';
 }
 
+// ---- Availability hint ("temperature") ----
+// The backend sends a level 0-3 per day and room group. The page turns that into
+// a soft note under the form. It never blocks anything: the WhatsApp button
+// works exactly the same with or without a note.
+
+const AVAIL_CACHE_KEY = 'te-availability-v1';
+const AVAIL_CACHE_MAX_AGE_MS = 6 * 60 * 60 * 1000; // before the server answers, trust a cached copy this long
+const AVAIL_ROOM_INDEX = { standard: 0, white: 1, blue: 2 };
+const FULL_WEEKDAY = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const HINT_WORD = { 1: 'tightening', 2: 'limited', 3: 'very limited' };
+const HINT_CTA = { 1: 'Continue below.', 2: 'Continue below.', 3: "Continue below and we'll confirm." };
+
+function loadAvailabilityCache() {
+  try {
+    const cached = JSON.parse(localStorage.getItem(AVAIL_CACHE_KEY));
+    if (cached && cached.days && Date.now() - cached.savedAt < AVAIL_CACHE_MAX_AGE_MS) {
+      state.availability = { version: cached.version, days: cached.days };
+    }
+  } catch (err) {
+    // no storage, or a bad entry — hints just start empty
+  }
+}
+
+function saveAvailabilityCache() {
+  try {
+    if (state.availability) {
+      localStorage.setItem(AVAIL_CACHE_KEY, JSON.stringify({ ...state.availability, savedAt: Date.now() }));
+    } else {
+      localStorage.removeItem(AVAIL_CACHE_KEY);
+    }
+  } catch (err) {
+    // private mode etc. — the cache is only a speed-up
+  }
+}
+
+/** The server's answer to our cached version: null means "no trustworthy data",
+ * { unchanged } means keep what we have, otherwise a new set of days. */
+function applyAvailability(incoming) {
+  if (!incoming) {
+    state.availability = null;
+  } else if (incoming.unchanged) {
+    if (state.availability) state.availability.version = incoming.version;
+  } else if (incoming.days && typeof incoming.days === 'object') {
+    state.availability = { version: incoming.version, days: incoming.days };
+  }
+  saveAvailabilityCache();
+}
+
+/** The days a stay occupies, in the same terms the backend uses: from the
+ * check-in date up to the day before checkout, plus the checkout date only if
+ * checkout is after noon. A same-day stay is that one day. */
+function stayDays(checkin, checkout) {
+  const first = new Date(checkin.getFullYear(), checkin.getMonth(), checkin.getDate());
+  const outDay = new Date(checkout.getFullYear(), checkout.getMonth(), checkout.getDate());
+  let last = addDays(outDay, -1);
+  if (outDay.getTime() === first.getTime()) last = first;
+  else if (checkout.getHours() * 60 + checkout.getMinutes() > 12 * 60) last = outDay;
+  const days = [];
+  for (let d = first; d.getTime() <= last.getTime() && days.length < 5; d = addDays(d, 1)) {
+    days.push({ key: toDateInputValue(d), date: d });
+  }
+  return days;
+}
+
+/** { level, line, cta } for the chosen room and dates, or null for no note. */
+function hintFor(room, checkin, checkout) {
+  const idx = AVAIL_ROOM_INDEX[room.key];
+  if (idx === undefined || !state.availability) return null;
+
+  const days = stayDays(checkin, checkout);
+  const pressured = [];
+  let level = 0;
+  days.forEach((day) => {
+    const row = state.availability.days[day.key];
+    const l = row ? Number(row[idx]) || 0 : 0;
+    if (l > 0) {
+      pressured.push(day);
+      level = Math.max(level, l);
+    }
+  });
+  if (!level) return null;
+
+  if (days[0].key === toDateInputValue(today())) {
+    return { level, line: 'Availability for today depends on current bookings.', cta: "Continue below and we'll check." };
+  }
+  const line = pressured.length === 1
+    ? `${FULL_WEEKDAY[pressured[0].date.getDay()]} availability is ${HINT_WORD[level]}.`
+    : `Chosen nights are ${HINT_WORD[level]}.`;
+  return { level, line, cta: HINT_CTA[level] };
+}
+
+function closeHintNote() {
+  el('tempHintNote').hidden = true;
+  el('tempHintInfo').setAttribute('aria-expanded', 'false');
+}
+
+function updateHint() {
+  const box = el('tempHint');
+  const hint = lastQuote && lastQuote.result.available ? hintFor(lastQuote.room, lastQuote.checkin, lastQuote.checkout) : null;
+  if (!hint) {
+    box.hidden = true;
+    closeHintNote();
+    return;
+  }
+  box.className = `temp-hint temp-hint--${hint.level}`;
+  el('tempHintLine').textContent = hint.line;
+  el('tempHintCta').textContent = hint.cta;
+  box.hidden = false;
+}
+
+el('tempHintInfo').addEventListener('click', (e) => {
+  e.stopPropagation();
+  const note = el('tempHintNote');
+  note.hidden = !note.hidden;
+  el('tempHintInfo').setAttribute('aria-expanded', String(!note.hidden));
+});
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('#tempHintNote')) closeHintNote();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeHintNote();
+});
+
 // ---- Room status / site notice backend (optional — no-op if BACKEND_URL unset) ----
 
 async function loadStatus() {
   if (!BACKEND_URL) return;
   try {
-    const res = await fetch(`${BACKEND_URL}?type=status&token=${encodeURIComponent(BACKEND_TOKEN)}`);
+    const known = state.availability && state.availability.version ? `&av=${encodeURIComponent(state.availability.version)}` : '';
+    const res = await fetch(`${BACKEND_URL}?type=status&token=${encodeURIComponent(BACKEND_TOKEN)}${known}`);
     const data = await res.json();
     if (!data.ok) return;
+
+    // An older backend has no `availability` field; leave any hints alone then.
+    if ('availability' in data) applyAvailability(data.availability);
 
     if (data.banner) {
       el('siteBanner').textContent = data.banner;
@@ -343,5 +476,6 @@ el('whatsappBtn').addEventListener('click', () => {
 // ---- Init ----
 
 initDateBounds();
+loadAvailabilityCache();
 loadStatus();
 recompute();

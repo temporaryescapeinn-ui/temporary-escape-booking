@@ -44,6 +44,8 @@ function setup() {
     status.appendRow(['white', true, '']);
     status.appendRow(['blue', true, '']);
   }
+
+  getAvailabilitySheet_(); // see Availability.gs
 }
 
 function getSharedSecret_() {
@@ -88,9 +90,11 @@ function doPost(e) {
 }
 
 /**
- * doGet — one query shape: ?type=status&token=...
- * Returns { ok: true, banner: string, disabledRooms: { roomKey: reason } }
- * (only rooms with enabled === FALSE appear in disabledRooms).
+ * doGet — one query shape: ?type=status&token=...[&av=<cached version>]
+ * Returns { ok: true, banner: string, disabledRooms: { roomKey: reason },
+ * availability: null | { version, unchanged } | { version, checkedAt, days } }
+ * (only rooms with enabled === FALSE appear in disabledRooms; `availability`
+ * is built in Availability.gs).
  */
 function doGet(e) {
   if (!checkAuth_(e.parameter.token)) {
@@ -120,5 +124,10 @@ function doGet(e) {
     }
   });
 
-  return jsonResponse_({ ok: true, banner: banner, disabledRooms: disabledRooms });
+  return jsonResponse_({
+    ok: true,
+    banner: banner,
+    disabledRooms: disabledRooms,
+    availability: availabilityFieldForStatus_(e.parameter),
+  });
 }

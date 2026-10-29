@@ -260,6 +260,101 @@ button, .room-card {
 }
 .shortcut.selected .icon { color: var(--orange-dark); }
 
+/* Availability hint ("temperature"): 3 levels of orange, light to deepest.
+   Always a soft note — it never disables anything. */
+.temp-hint {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 10px 6px 10px 12px;
+  border-radius: 14px;
+  background: var(--hint-bg);
+  border: 1px solid var(--hint-bd);
+}
+.temp-hint[hidden] { display: none; }
+.temp-hint--1 { --hint-bg: #FFF6EC; --hint-bd: #F8DDBF; --hint-on: #F7B070; --hint-off: #EBDACB; --hint-lead: #9A560C; --hint-tx: #76604E; }
+.temp-hint--2 { --hint-bg: #FFEAD3; --hint-bd: #F5C79A; --hint-on: #F58A3D; --hint-off: #E8CDB0; --hint-lead: #9A430A; --hint-tx: #6E5746; }
+.temp-hint--3 { --hint-bg: #FFDDBF; --hint-bd: #EFA467; --hint-on: #E5560F; --hint-off: #E2BE9A; --hint-lead: #7A2D05; --hint-tx: #5F4A3A; }
+
+.temp-gauge {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 16px;
+  flex: none;
+}
+.temp-gauge i {
+  width: 4px;
+  border-radius: 2px;
+  background: var(--hint-off);
+}
+.temp-gauge i:nth-child(1) { height: 6px; }
+.temp-gauge i:nth-child(2) { height: 11px; }
+.temp-gauge i:nth-child(3) { height: 16px; }
+.temp-hint--1 .temp-gauge i:nth-child(-n+1),
+.temp-hint--2 .temp-gauge i:nth-child(-n+2),
+.temp-hint--3 .temp-gauge i { background: var(--hint-on); }
+
+.temp-text { flex: 1; min-width: 0; line-height: 1.4; }
+.temp-line { margin: 0; font-size: 13px; font-weight: 600; color: var(--hint-lead); }
+.temp-cta { margin: 0; font-size: 12px; color: var(--hint-tx); }
+
+.temp-info {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--hint-lead);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.temp-info span {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 0.5px solid currentColor;
+  font-size: 10px;
+  line-height: 15px;
+}
+.temp-info:focus-visible { outline: 2px solid var(--orange); outline-offset: 2px; border-radius: 8px; }
+
+.temp-note {
+  position: absolute;
+  right: 8px;
+  top: 100%;
+  margin: 4px 0 0;
+  z-index: 5;
+  width: 210px;
+  max-width: calc(100vw - 40px);
+  padding: 9px 12px;
+  background: #FFFFFF;
+  border: 1px solid var(--hint-bd);
+  border-radius: 12px;
+  box-shadow: 0 4px 14px rgba(60, 40, 20, 0.14);
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--charcoal);
+}
+.temp-note[hidden] { display: none; }
+.temp-note::before {
+  content: '';
+  position: absolute;
+  right: 14px;
+  top: -6px;
+  width: 10px;
+  height: 10px;
+  background: #FFFFFF;
+  border-left: 1px solid var(--hint-bd);
+  border-top: 1px solid var(--hint-bd);
+  transform: rotate(45deg);
+}
+
 .price-panel {
   background: var(--black);
   border-radius: 16px;

@@ -87,6 +87,16 @@
 
   </main>
 
+  <div id="tempHint" class="temp-hint" hidden>
+    <div class="temp-gauge" aria-hidden="true"><i></i><i></i><i></i></div>
+    <div class="temp-text" aria-live="polite">
+      <p id="tempHintLine" class="temp-line"></p>
+      <p id="tempHintCta" class="temp-cta"></p>
+    </div>
+    <button type="button" id="tempHintInfo" class="temp-info" aria-label="About this note" aria-expanded="false" aria-controls="tempHintNote"><span aria-hidden="true">i</span></button>
+    <p id="tempHintNote" class="temp-note" role="note" hidden>Based on current bookings, which can change.</p>
+  </div>
+
   <div class="price-panel">
     <p id="recapRoom" class="recap-room">Pick a room and time</p>
     <p id="recapTimes" class="recap-times"></p>
