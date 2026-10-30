@@ -300,6 +300,9 @@ button, .room-card {
 .temp-text { flex: 1; min-width: 0; line-height: 1.4; }
 .temp-line { margin: 0; font-size: 13px; font-weight: 600; color: var(--hint-lead); }
 .temp-cta { margin: 0; font-size: 12px; color: var(--hint-tx); }
+@media (max-width: 339px) {
+  .temp-line { font-size: 12px; } /* keeps the longest weekday on one line on the narrowest phones */
+}
 
 .temp-info {
   flex: none;

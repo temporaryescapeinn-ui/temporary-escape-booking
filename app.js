@@ -280,8 +280,42 @@ const AVAIL_CACHE_KEY = 'te-availability-v1';
 const AVAIL_CACHE_MAX_AGE_MS = 6 * 60 * 60 * 1000; // before the server answers, trust a cached copy this long
 const AVAIL_ROOM_INDEX = { standard: 0, white: 1, blue: 2 };
 const FULL_WEEKDAY = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-const HINT_WORD = { 1: 'tightening', 2: 'limited', 3: 'very limited' };
+// One word per level is picked at random when the page loads and then kept for the
+// whole visit, so the note doesn't change wording while someone adjusts their dates.
+const HINT_WORDS = {
+  1: ['narrowing', 'shrinking', 'thinning'],
+  2: ['limited', 'low', 'scarce'],
+  3: ['very limited', 'very tight', 'very low', 'slim'],
+};
 const HINT_CTA = { 1: 'Continue below.', 2: 'Continue below.', 3: "Continue below and we'll confirm." };
+
+function pickRandom(list) {
+  return list[Math.floor(Math.random() * list.length)];
+}
+
+const hintWords = {
+  1: pickRandom(HINT_WORDS[1]),
+  2: pickRandom(HINT_WORDS[2]),
+  3: pickRandom(HINT_WORDS[3]),
+};
+
+/** Writes the bold line, keeping it to one line: if the chosen word wraps (the
+ * longest weekday on a narrow phone), tries the level's other words, shortest
+ * first, and keeps the first that fits. The box must be visible to measure. */
+function fitHintLine(hint) {
+  const lineEl = el('tempHintLine');
+  const lineHeight = parseFloat(getComputedStyle(lineEl).lineHeight) || 18;
+  const wraps = () => lineEl.offsetHeight > lineHeight * 1.5;
+  lineEl.textContent = hint.lineFor(hintWords[hint.level]);
+  if (!wraps()) return;
+  const shortestFirst = HINT_WORDS[hint.level].slice().sort((a, b) => a.length - b.length);
+  for (let i = 0; i < shortestFirst.length; i++) {
+    lineEl.textContent = hint.lineFor(shortestFirst[i]);
+    if (!wraps()) return;
+  }
+  // Nothing fits (a very narrow phone): settle on the shortest, so it wraps as little as possible.
+  lineEl.textContent = hint.lineFor(shortestFirst[0]);
+}
 
 function loadAvailabilityCache() {
   try {
@@ -335,7 +369,7 @@ function stayDays(checkin, checkout) {
   return days;
 }
 
-/** { level, line, cta } for the chosen room and dates, or null for no note. */
+/** { level, lineFor(word), cta } for the chosen room and dates, or null for no note. */
 function hintFor(room, checkin, checkout) {
   const idx = AVAIL_ROOM_INDEX[room.key];
   if (idx === undefined || !state.availability) return null;
@@ -354,12 +388,13 @@ function hintFor(room, checkin, checkout) {
   if (!level) return null;
 
   if (days[0].key === toDateInputValue(today())) {
-    return { level, line: 'Availability for today depends on current bookings.', cta: "Continue below and we'll check." };
+    return { level, lineFor: (word) => `Availability today is ${word}.`, cta: "Continue below and we'll check." };
   }
-  const line = pressured.length === 1
-    ? `${FULL_WEEKDAY[pressured[0].date.getDay()]} availability is ${HINT_WORD[level]}.`
-    : `Chosen nights are ${HINT_WORD[level]}.`;
-  return { level, line, cta: HINT_CTA[level] };
+  if (pressured.length === 1) {
+    const dayName = FULL_WEEKDAY[pressured[0].date.getDay()];
+    return { level, lineFor: (word) => `${dayName} availability is ${word}.`, cta: HINT_CTA[level] };
+  }
+  return { level, lineFor: (word) => `Chosen nights are ${word}.`, cta: HINT_CTA[level] };
 }
 
 function closeHintNote() {
@@ -376,9 +411,9 @@ function updateHint() {
     return;
   }
   box.className = `temp-hint temp-hint--${hint.level}`;
-  el('tempHintLine').textContent = hint.line;
   el('tempHintCta').textContent = hint.cta;
   box.hidden = false;
+  fitHintLine(hint);
 }
 
 el('tempHintInfo').addEventListener('click', (e) => {
