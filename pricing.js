@@ -1,7 +1,9 @@
 // Vanilla-JS port of C:\dev\tea\src\pricing\calculatePrice.ts — keep the two
-// in sync by hand. Same rules, same numbers; the only behavior difference is
-// that this version returns { unavailable: true, reason } instead of
-// throwing, since a customer shouldn't ever see a stack trace.
+// in sync by hand. Same rules and numbers apart from the page-only rules noted
+// in docs/booking-page-pricing-and-rules.md (e.g. no half-hour grace on short
+// stays: over a tier bumps to the next); this version also returns
+// { unavailable: true, reason } instead of throwing, since a customer
+// shouldn't ever see a stack trace.
 
 const ROOMS = {
   standard: {
@@ -136,13 +138,15 @@ function calculateSameDayPrice(room, checkInMinutes, checkOutMinutes, durationHo
     if (durationHours < MIN_STAY_HOURS) {
       throw new Error(`Minimum stay is ${MIN_STAY_HOURS} hours.`);
     }
-    if (durationHours <= 3.5) {
-      return { packageType: 'shortStay', price: shortStayTierPrice(room, 3), isFallbackEstimate: durationHours !== 3 };
+    // Page-only rule: going even a minute over a tier bumps to the next one
+    // (3h01 is the 4hr price). The admin app still gives a half-hour grace.
+    if (durationHours <= 3) {
+      return { packageType: 'shortStay', price: shortStayTierPrice(room, 3), isFallbackEstimate: false };
     }
-    if (durationHours <= 4.5) {
+    if (durationHours <= 4) {
       return { packageType: 'shortStay', price: shortStayTierPrice(room, 4), isFallbackEstimate: durationHours !== 4 };
     }
-    if (durationHours <= 5.5) {
+    if (durationHours <= 5) {
       return { packageType: 'shortStay', price: shortStayTierPrice(room, 5), isFallbackEstimate: durationHours !== 5 };
     }
     if (checkInMinutes < TIME.eightPM && checkOutMinutes > TIME.eightPM) {
