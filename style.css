@@ -213,11 +213,11 @@ button, .room-card {
 
 .shortcut-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 6px;
 }
 .shortcut {
-  aspect-ratio: 1;
+  min-height: 76px; /* three equal tiles; a fixed height keeps them from growing into tall squares */
   border-radius: 8px;
   border: 0.5px solid var(--border);
   background: var(--card-bg);
@@ -231,10 +231,6 @@ button, .room-card {
   text-align: center;
   padding: 4px 2px;
   cursor: pointer;
-}
-.shortcut--wide {
-  grid-column: span 2; /* takes the place of the old Half day and Full day tiles */
-  aspect-ratio: auto;
 }
 .shortcut:disabled, .chip:disabled {
   opacity: 0.45;
