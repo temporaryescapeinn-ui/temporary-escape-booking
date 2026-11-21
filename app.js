@@ -10,6 +10,7 @@ const state = {
   roomKey: null,
   disabledRooms: {}, // { roomKey: reason }
   availability: null, // { version, days: { 'YYYY-MM-DD': [standard, white, blue] } } — levels 0-3
+  link: null, // { kind: 'shortStay' | 'overnight', extraDays } — the shortcut checkout follows check-in
 };
 
 function pad(n) { return String(n).padStart(2, '0'); }
@@ -56,46 +57,127 @@ function setDateTime(dateId, timeId, d) {
   el(timeId).value = toTimeInputValue(d);
 }
 
+// ---- Defaults, 5-minute steps and limits ----
+
+const TIME_STEP_MINUTES = 5;
+const FALLBACK_CHECKIN_HOUR = 9; // check-in when a date is picked with no time, or today has none left
+const DEFAULT_CHECKOUT_HOUR = 8; // "Add a day" with no checkout yet: 8:00am, still inside the free grace
+
+function dayStart(d) { return new Date(d.getFullYear(), d.getMonth(), d.getDate()); }
+function sameDay(a, b) { return dayStart(a).getTime() === dayStart(b).getTime(); }
+function formatMinutes(total) { return `${pad(Math.floor(total / 60))}:${pad(total % 60)}`; }
+
+/** The soonest check-in that is valid right now: the next 5-minute mark inside
+ * 8:30am-9:45pm, or 9:00am tomorrow once today has no valid time left. */
+function nextValidCheckin() {
+  const now = new Date();
+  const minutes = now.getHours() * 60 + now.getMinutes() + 1; // +1: never land on a minute that has already begun
+  const rounded = Math.ceil(minutes / TIME_STEP_MINUTES) * TIME_STEP_MINUTES;
+  if (rounded <= TIME.workingHoursEnd) {
+    const m = Math.max(rounded, TIME.workingHoursStart);
+    const d = today();
+    d.setHours(Math.floor(m / 60), m % 60, 0, 0);
+    return d;
+  }
+  const tomorrow = addDays(today(), 1);
+  tomorrow.setHours(FALLBACK_CHECKIN_HOUR, 0, 0, 0);
+  return tomorrow;
+}
+
+/** Times snap to the nearest 5 minutes, since phone pickers don't always honour the step. */
+function snapTimeField(id) {
+  const value = el(id).value;
+  if (!value) return;
+  const [h, m] = value.split(':').map(Number);
+  const total = Math.min(Math.round((h * 60 + m) / TIME_STEP_MINUTES) * TIME_STEP_MINUTES, 24 * 60 - TIME_STEP_MINUTES);
+  el(id).value = formatMinutes(total);
+}
+
+/** Returns the check-in, filling in whatever is missing with something valid. */
 function ensureCheckin() {
   let checkin = readDateTime('checkinDate', 'checkinTime');
-  if (!checkin) {
-    checkin = new Date();
-    checkin.setMinutes(Math.ceil(checkin.getMinutes() / 5) * 5, 0, 0);
-    setDateTime('checkinDate', 'checkinTime', checkin);
+  if (checkin) return checkin;
+
+  const date = readDate('checkinDate');
+  if (date && date.getTime() > today().getTime()) {
+    checkin = new Date(date); // a future date with no time yet
+    checkin.setHours(FALLBACK_CHECKIN_HOUR, 0, 0, 0);
+  } else {
+    checkin = nextValidCheckin();
   }
+  setDateTime('checkinDate', 'checkinTime', checkin);
+  syncCheckinChips();
+  updateCheckoutBounds();
   return checkin;
+}
+
+/** Nights between two moments' calendar dates; the page quotes at most MAX_NIGHTS. */
+function withinNightLimit(checkin, checkout) {
+  return Math.round((dayStart(checkout) - dayStart(checkin)) / 86400000) <= MAX_NIGHTS;
+}
+
+function updateTimeBounds() {
+  const checkinDay = readDate('checkinDate');
+  let first = TIME.workingHoursStart;
+  if (checkinDay && sameDay(checkinDay, new Date())) {
+    const soonest = nextValidCheckin();
+    if (sameDay(soonest, new Date())) first = Math.max(first, soonest.getHours() * 60 + soonest.getMinutes());
+  }
+  el('checkinTime').min = formatMinutes(first);
+  el('checkinTime').max = formatMinutes(TIME.workingHoursEnd);
+
+  // A same-day checkout can't be earlier than the minimum stay after check-in.
+  const checkin = readDateTime('checkinDate', 'checkinTime');
+  const checkoutDay = readDate('checkoutDate');
+  let checkoutMin = '';
+  if (checkin && checkoutDay && sameDay(checkin, checkoutDay)) {
+    const earliest = new Date(checkin.getTime() + MIN_STAY_HOURS * 3600000);
+    if (sameDay(earliest, checkin)) checkoutMin = toTimeInputValue(earliest);
+  }
+  el('checkoutTime').min = checkoutMin;
+}
+
+/** "Today" is pointless once today has no valid check-in time left. */
+function updateTodayChip() {
+  const chip = document.querySelector('.chip[data-day-target="checkin"][data-offset="0"]');
+  chip.disabled = !sameDay(nextValidCheckin(), new Date());
 }
 
 // ---- Room picker ----
 
-function selectRoom(key) {
+const ROOM_DESCRIPTIONS = {
+  standard: 'Standard covers our Yellow, Orange and Green rooms.',
+  white: 'White is our premium room, with more amenities.',
+  blue: 'Blue is smaller than our other rooms.',
+};
+
+// `isDefault` marks the page's own preselection, so it can be undone if the room
+// turns out to be switched off; a room the customer tapped is never undone.
+function selectRoom(key, isDefault) {
   if (state.disabledRooms[key]) return;
   state.roomKey = key;
+  state.roomIsDefault = !!isDefault;
   document.querySelectorAll('.room-card').forEach((btn) => {
     btn.classList.toggle('selected', btn.dataset.room === key);
   });
+  el('roomInfoPanel').textContent = ROOM_DESCRIPTIONS[key] || '';
   recompute();
 }
 
+function clearRoom() {
+  state.roomKey = null;
+  state.roomIsDefault = false;
+  document.querySelectorAll('.room-card').forEach((btn) => btn.classList.remove('selected'));
+  el('roomInfoPanel').textContent = '';
+}
+
 document.querySelectorAll('.room-card').forEach((btn) => {
-  btn.addEventListener('click', (e) => {
-    if (e.target.closest('[data-room-info]')) return;
-    selectRoom(btn.dataset.room);
-  });
+  btn.addEventListener('click', () => selectRoom(btn.dataset.room));
   btn.addEventListener('keydown', (e) => {
-    if (e.target.closest('[data-room-info]')) return;
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
       selectRoom(btn.dataset.room);
     }
-  });
-});
-
-el('roomGrid').querySelectorAll('[data-room-info]').forEach((infoBtn) => {
-  infoBtn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const panel = el('roomInfoPanel');
-    panel.hidden = !panel.hidden;
   });
 });
 
@@ -108,6 +190,7 @@ document.querySelectorAll('.chip[data-day-target="checkin"]').forEach((chip) => 
     el('checkinDate').value = toDateInputValue(d);
     document.querySelectorAll('.chip[data-day-target="checkin"]').forEach((c) => c.classList.toggle('selected', c === chip));
     updateCheckoutBounds();
+    applyLink();
     recompute();
   });
 });
@@ -116,21 +199,68 @@ document.querySelectorAll('.chip[data-day-target="checkin"]').forEach((chip) => 
 
 const SHORTCUTS = {
   shortStay: (checkin) => { const d = new Date(checkin); d.setHours(d.getHours() + 3); return d; },
-  overnight: (checkin) => { const d = addDays(checkin, 1); d.setHours(8, 0, 0, 0); return d; },
-  halfDay: (checkin) => { const d = addDays(checkin, 1); d.setHours(8, 0, 0, 0); return d; },
-  fullDay: (checkin) => { const d = addDays(checkin, 1); d.setHours(8, 0, 0, 0); return d; },
+  overnight: (checkin) => { const d = addDays(checkin, 1); d.setHours(DEFAULT_CHECKOUT_HOUR, 0, 0, 0); return d; },
 };
 
-document.querySelectorAll('.shortcut').forEach((btn) => {
+// A shortcut stays "linked" to the check-in: change the check-in afterwards and the
+// checkout follows (a linked shortcut plus any days added with "Add a day").
+function linkedCheckout(checkin, link) {
+  const checkout = SHORTCUTS[link.kind](checkin);
+  return link.extraDays ? addDays(checkout, link.extraDays) : checkout;
+}
+
+function setLink(link) {
+  state.link = link;
+  document.querySelectorAll('.shortcut[data-shortcut]').forEach((b) => {
+    b.classList.toggle('selected', !!link && b.dataset.shortcut === link.kind);
+  });
+}
+
+/** Re-applies the linked shortcut to the current check-in, never past the night limit. */
+function applyLink() {
+  const checkin = readDateTime('checkinDate', 'checkinTime');
+  if (!checkin || !state.link) return;
+  while (state.link.extraDays > 0 && !withinNightLimit(checkin, linkedCheckout(checkin, state.link))) {
+    state.link.extraDays -= 1;
+  }
+  setDateTime('checkoutDate', 'checkoutTime', linkedCheckout(checkin, state.link));
+  updateCheckoutBounds();
+}
+
+document.querySelectorAll('.shortcut[data-shortcut]').forEach((btn) => {
   btn.addEventListener('click', () => {
-    const checkin = ensureCheckin();
-    const checkout = SHORTCUTS[btn.dataset.shortcut](checkin);
-    setDateTime('checkoutDate', 'checkoutTime', checkout);
-    document.querySelectorAll('.shortcut').forEach((b) => b.classList.toggle('selected', b === btn));
-    updateCheckoutBounds();
+    ensureCheckin();
+    setLink({ kind: btn.dataset.shortcut, extraDays: 0 });
+    applyLink();
     recompute();
   });
 });
+
+// "Add a day" moves the checkout a day later, whatever produced the current one.
+el('addDayBtn').addEventListener('click', () => {
+  const checkin = ensureCheckin();
+  const checkout = readDateTime('checkoutDate', 'checkoutTime');
+  if (!checkout) {
+    // Nothing yet: one night, out at 8:00am the next morning.
+    setLink({ kind: 'overnight', extraDays: 0 });
+    applyLink();
+  } else if (!withinNightLimit(checkin, addDays(checkout, 1))) {
+    return;
+  } else if (state.link) {
+    state.link.extraDays += 1;
+    applyLink();
+  } else {
+    setDateTime('checkoutDate', 'checkoutTime', addDays(checkout, 1));
+    updateCheckoutBounds();
+  }
+  recompute();
+});
+
+function updateAddDayState() {
+  const checkin = readDateTime('checkinDate', 'checkinTime');
+  const checkout = readDateTime('checkoutDate', 'checkoutTime');
+  el('addDayBtn').disabled = !!(checkin && checkout) && !withinNightLimit(checkin, addDays(checkout, 1));
+}
 
 // ---- Manual field edits also recompute, and clear the "selected" shortcut state ----
 
@@ -145,14 +275,17 @@ function syncCheckinChips() {
 
 ['checkinDate', 'checkinTime'].forEach((id) => {
   el(id).addEventListener('change', () => {
+    if (id === 'checkinTime') snapTimeField(id);
     syncCheckinChips();
     updateCheckoutBounds();
+    applyLink(); // a linked shortcut's checkout follows the new check-in
     recompute();
   });
 });
 ['checkoutDate', 'checkoutTime'].forEach((id) => {
   el(id).addEventListener('change', () => {
-    document.querySelectorAll('.shortcut').forEach((b) => b.classList.remove('selected'));
+    if (id === 'checkoutTime') snapTimeField(id);
+    setLink(null); // an edited checkout is the customer's own, so stop following check-in
     recompute();
   });
 });
@@ -173,6 +306,9 @@ function formatRecapTime(d) {
 let lastQuote = null;
 
 function recompute() {
+  updateTimeBounds();
+  updateAddDayState();
+  updateTodayChip();
   recomputeQuote();
   updateHint();
 }
@@ -448,6 +584,9 @@ async function loadStatus() {
     }
 
     state.disabledRooms = data.disabledRooms || {};
+    // The page preselects Standard before it knows what's switched off; undo that
+    // if Standard turns out to be disabled, so a closed room isn't left selected.
+    if (state.roomIsDefault && state.roomKey && state.disabledRooms[state.roomKey]) clearRoom();
     document.querySelectorAll('.room-card').forEach((btn) => {
       const key = btn.dataset.room;
       const disabled = !!state.disabledRooms[key];
@@ -512,5 +651,6 @@ el('whatsappBtn').addEventListener('click', () => {
 
 initDateBounds();
 loadAvailabilityCache();
+selectRoom('standard', true); // Standard is the default; Blue and White are a deliberate change
 loadStatus();
 recompute();
